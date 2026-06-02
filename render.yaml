@@ -7,8 +7,4 @@ services:
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
-        value: 22
-      - key: OLLAMA_URL
-        value: https://ollama-service.onrender.com
-      - key: LLM_MODEL
-        value: qwen2.5:3b
+        value: "22"
