@@ -1,19 +1,20 @@
 import { initScene3D, setSpeaking, setListening, updateFacePosition, resetFacePosition } from './scene.js';
 import { 
-    toggleListening, speakText, showStatus, setProcessing,
-    toggleSpeaking, startListening, stopListening, stopSpeaking, isSpeechEnabled
+    speakText, setStatusCallback,
+    startListening, stopListening, isSpeechEnabled
 } from './voice.js';
 import { startWebcam, detectFace } from './webcam.js';
 
 let isProcessing = false;
 let chatHistory = [];
 let wakeTimeout = null;
+let currentStatus = 'idle';
 
 // ====== Инициализация ======
 async function init() {
     console.log('🔄 Запуск виртуального офис-менеджера...');
 
-    // 3D сцена
+    // 3D сцена с аватаром
     initScene3D();
 
     // Веб-камера
@@ -23,22 +24,29 @@ async function init() {
     window.speechSynthesis.getVoices();
     window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
 
-    // Кнопки
-    document.getElementById('btn-mic').addEventListener('click', () => {
-        toggleListening(handleUserSpeech);
+    // Устанавливаем колбэк статуса
+    setStatusCallback((status) => {
+        currentStatus = status;
+        if (status === 'speaking') {
+            setSpeaking(true);
+            setListening(false);
+        } else if (status === 'idle') {
+            setSpeaking(false);
+            if (!isProcessing) {
+                setListening(true);
+            }
+        }
     });
-    document.getElementById('btn-speak').addEventListener('click', toggleSpeaking);
 
-    // Приветствие
+    // Приветствие через 1.5 секунды
     setTimeout(() => {
-        showStatus('👋 Елена поприветствует вас...');
         const greeting = 'Здравствуйте! Я Елена, виртуальный офис-менеджер. Чем я могу вам помочь?';
         speakText(greeting, () => {
-            setTimeout(() => startListening(handleUserSpeech), 1000);
+            setTimeout(() => startListening(handleUserSpeech), 500);
         });
-    }, 2000);
+    }, 1500);
 
-    // Поиск лица каждые 500мс
+    // Поиск лица каждые 300мс
     setInterval(() => {
         const face = detectFace();
         if (face) {
@@ -46,19 +54,18 @@ async function init() {
         } else {
             resetFacePosition();
         }
-    }, 500);
+    }, 300);
 
     console.log('✅ Виртуальный офис-менеджер запущен');
 }
 
 // ====== Обработка речи пользователя ======
 async function handleUserSpeech(text) {
-    if (isProcessing || !text.trim()) return;
+    if (isProcessing || !text || !text.trim()) return;
 
     isProcessing = true;
     setProcessing(true);
     setListening(true);
-    showStatus('⏳ Елена думает...');
 
     try {
         const response = await fetch('/api/chat', {
@@ -78,10 +85,7 @@ async function handleUserSpeech(text) {
         chatHistory.push({ role: 'user', content: text });
         chatHistory.push({ role: 'assistant', content: answer });
 
-        // Озвучиваем ответ
-        setSpeaking(true);
-        showStatus('🔊 Елена отвечает...');
-
+        // Озвучиваем ответ (speaking статус установится через колбэк)
         speakText(answer, () => {
             setSpeaking(false);
             isProcessing = false;
@@ -92,12 +96,11 @@ async function handleUserSpeech(text) {
                 if (!isProcessing) {
                     startListening(handleUserSpeech);
                 }
-            }, 500);
+            }, 300);
         });
 
     } catch (err) {
         console.error('Error:', err);
-        showStatus('❌ Ошибка. Попробуйте ещё раз');
         isProcessing = false;
         setProcessing(false);
         setTimeout(() => startListening(handleUserSpeech), 2000);
